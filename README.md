@@ -127,6 +127,8 @@ Report and assessment reuse a valid Graph session matching the requested tenant,
 
 Requires ImportExcel, Microsoft Excel, and the bundled `Resources\Customer-SecurityBaselineSettings-Overview.xlsx` template. `-TemplatePath` permits an explicit template. The template cannot be overwritten by the output. Returns the workbook path and matching/deduplication counts.
 
+When a setting gets `No match` or `Ambiguous` from the Markdown files, the export reuses the CIS Reference already present in the template's All Settings sheet. Rows are matched on Baseline Policy (ignoring a `NotDeployed-` prefix), Setting Name and Expected Value, with a fallback to Baseline Policy and Setting Name; conflicting template references are ignored. Template references take precedence over parent inheritance and are reported as `TemplateCount`.
+
 The All Settings sheet keeps its five summary counters and assignment-status data without the extra F4 counter or CIS Reference Status column. Deviations remains a manual worksheet: rows 9-11 are blank for entry, and template rows from 12 onward are removed. No deviation rows or comments are generated automatically.
 
 ## Validation

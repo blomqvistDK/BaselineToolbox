@@ -282,8 +282,28 @@ if ($VerifyWorkbook) {
         Assert-Condition ($sheet.Dimension.End.Column -eq 6 -and $sheet.Cells[$headerRow, 6].Text -eq 'Assignment status' -and
             $sheet.Cells[$firstDataRow, 6].Text -eq 'Yes' -and $sheet.AutoFilterAddress.End.Column -eq 6 -and
             [string]::IsNullOrEmpty($sheet.Cells['F3'].Text) -and [string]::IsNullOrEmpty($sheet.Cells['F4'].Formula) -and
-            $customExport.RowCount -eq $export.RowCount -and $customExport.MatchedCount -eq $export.MatchedCount) 'Existing reference-status column was not removed safely from a supplied template.'
+            $customExport.RowCount -eq $export.RowCount -and ($customExport.MatchedCount + $customExport.TemplateCount) -eq $export.MatchedCount) 'Existing reference-status column was not removed safely from a supplied template.'
         Write-Output 'PASS: Excel opens the generated template; legacy column removal preserves assignment data, filters, and reference counts.'
+
+        $restoreTemplatePath = Join-Path $temporaryFolder 'restore-template.xlsx'
+        $restoreOutputPath = Join-Path $temporaryFolder 'restore-assessment.xlsx'
+        $rootRow = $firstDataRow + 6
+        $unmatchedChildRow = $firstDataRow + 9
+        $sheet.Cells[$rootRow, 1].Value = 'NotDeployed-Printers'
+        $sheet.Cells[$rootRow, 4].Value = '9.9.9'
+        $sheet.Cells[$unmatchedChildRow, 4].Value = '4.11.7.1.9'
+        $sheet.Cells[$bitlockerStartRow, 4].Value = '0.0.0'
+        $package.SaveAs([System.IO.FileInfo]::new($restoreTemplatePath))
+        $package.Dispose()
+        $package = $null
+        $restoreExport = Export-BaselineAssessmentWorkbook -CsvPath $csvPath -MarkdownFolder $temporaryFolder -OutputPath $restoreOutputPath -TemplatePath $restoreTemplatePath
+        $package = Open-ExcelPackage -Path $restoreOutputPath
+        $sheet = $package.Workbook.Worksheets['All Settings']
+        Assert-Condition ($sheet.Cells[$rootRow, 4].Text -eq '9.9.9') 'Unmatched setting lost the CIS Reference present in the template.'
+        Assert-Condition ($sheet.Cells[$unmatchedChildRow, 4].Text -eq '4.11.7.1.9') 'Template reference did not take precedence over parent inheritance.'
+        Assert-Condition ($sheet.Cells[$bitlockerStartRow, 4].Text -eq '4.11.7.1.1') 'Markdown reference was overridden by the template.'
+        Assert-Condition ($restoreExport.TemplateCount -eq 6 -and $restoreExport.NoMatchCount -eq 0 -and $restoreExport.MatchedCount -eq 4) 'Template reference counts were incorrect.'
+        Write-Output 'PASS: template CIS References are kept for unresolved settings and precede inheritance.'
     } finally {
         if ($package) { $package.Dispose() }
         Remove-Item -LiteralPath $temporaryFolder -Recurse -Force

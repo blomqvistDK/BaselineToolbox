@@ -64,10 +64,6 @@ function Export-BaselineAssessmentWorkbook {
         $resolved = Resolve-BaselineCisReference -Lookup $cisLookup -CsvRow $csvRow -SettingPath $hierarchy[$csvIndex].Path -SimilarityThreshold $SimilarityThreshold
         [void]$referenceResults.Add($resolved)
     }
-    Set-BaselineAssessmentCisReferenceInheritance -Hierarchy $hierarchy -ReferenceResults $referenceResults
-    $matchedCount = @($referenceResults | Where-Object { $_.Status -in @('Matched','Matched (other policy)','Inherited') }).Count
-    $twodayCount = @($referenceResults | Where-Object { $_.Status -eq 'Twoday' }).Count
-    $ambiguousCount = @($referenceResults | Where-Object { $_.Status -eq 'Ambiguous' }).Count
 
     $workingPath = Join-Path $outputDirectory ('.{0}.{1}.xlsx' -f [System.IO.Path]::GetFileNameWithoutExtension($outputFullPath), [guid]::NewGuid().ToString('N'))
     $excel = $null
@@ -119,6 +115,47 @@ function Export-BaselineAssessmentWorkbook {
             }
             $templateLastColumn--
         }
+
+        # Reuse curated template references for settings the Markdown files cannot resolve unambiguously.
+        $templateReferences = @{}
+        $getTemplateKeys = {
+            param([string]$Policy, [string]$Setting, [string]$Value)
+            $policyKey = Get-BaselineExportPolicyKey -PolicyName ($Policy -replace '^\s*NotDeployed-', '')
+            $settingKey = Get-BaselineExportSettingKey -SettingName $Setting
+            if (-not $policyKey -or -not $settingKey) { return @() }
+            @(('V|{0}|{1}|{2}' -f $policyKey, $settingKey, (Normalize-CompareText -Text $Value)), ('S|{0}|{1}' -f $policyKey, $settingKey))
+        }
+        for ($rowIndex = $headerRow + 1; $rowIndex -le $templateLastRow; $rowIndex++) {
+            $templateReference = ([string]$settingsSheet.Cells[$rowIndex, $columnByName['CIS Reference']].Text).Trim()
+            if (-not $templateReference) { continue }
+            $keys = & $getTemplateKeys ([string]$settingsSheet.Cells[$rowIndex, $columnByName['Baseline Policy']].Text) ([string]$settingsSheet.Cells[$rowIndex, $columnByName['Setting Name']].Text) ([string]$settingsSheet.Cells[$rowIndex, $columnByName['Expected Value']].Text)
+            foreach ($key in $keys) {
+                if (-not $templateReferences.ContainsKey($key)) {
+                    $templateReferences[$key] = $templateReference
+                } elseif ($templateReferences[$key] -ne $templateReference) {
+                    $templateReferences[$key] = $null
+                }
+            }
+        }
+        for ($csvIndex = 0; $csvIndex -lt $csvRows.Count; $csvIndex++) {
+            $resolved = $referenceResults[$csvIndex]
+            if ($resolved.Status -notin @('No match', 'Ambiguous')) { continue }
+            $csvRow = $csvRows[$csvIndex]
+            foreach ($key in (& $getTemplateKeys ([string]$csvRow.'Baseline Policy') ([string]$csvRow.'Setting Name') ([string]$csvRow.'Expected Value'))) {
+                if ($templateReferences.ContainsKey($key)) {
+                    if ($templateReferences[$key]) {
+                        $resolved.CISReference = $templateReferences[$key]
+                        $resolved.Status = 'Template'
+                    }
+                    break
+                }
+            }
+        }
+        Set-BaselineAssessmentCisReferenceInheritance -Hierarchy $hierarchy -ReferenceResults $referenceResults
+        $matchedCount = @($referenceResults | Where-Object { $_.Status -in @('Matched','Matched (other policy)','Inherited') }).Count
+        $twodayCount = @($referenceResults | Where-Object { $_.Status -eq 'Twoday' }).Count
+        $ambiguousCount = @($referenceResults | Where-Object { $_.Status -eq 'Ambiguous' }).Count
+        $templateCount = @($referenceResults | Where-Object { $_.Status -eq 'Template' }).Count
 
         $firstDataRow = $headerRow + 1
         $lastDataRow = $headerRow + $csvRows.Count
@@ -212,6 +249,7 @@ function Export-BaselineAssessmentWorkbook {
         TwodayCount = $twodayCount
         NoMatchCount = @($referenceResults | Where-Object { $_.Status -eq 'No match' }).Count
         AmbiguousCount = $ambiguousCount
+        TemplateCount = $templateCount
         DuplicatesRemoved = $mergeResult.DuplicatesRemoved
         ConflictCount = @($csvRows | Where-Object { [string]$_.Status -eq 'Conflict' }).Count
     }

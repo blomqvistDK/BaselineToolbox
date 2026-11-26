@@ -4740,9 +4740,9 @@ $btnAssessmentWorkbookExport.Add_Click({
         $btnAssessmentWorkbookOpen.IsEnabled = $true
         $assessmentWorkbookProgressBar.IsIndeterminate = $false
         $assessmentWorkbookProgressBar.Value = 100
-        $txtAssessmentWorkbookStatus.Text = "$($result.RowCount) settings exported | $($result.MatchedCount) references matched | $($result.TwodayCount) Twoday | $($result.NoMatchCount) not found | $($result.AmbiguousCount) ambiguous"
+        $txtAssessmentWorkbookStatus.Text = "$($result.RowCount) settings exported | $($result.MatchedCount) references matched | $($result.TwodayCount) Twoday | $($result.TemplateCount) from template | $($result.NoMatchCount) not found | $($result.AmbiguousCount) ambiguous"
         Write-AssessmentWorkbookLog "Workbook created: $($result.OutputPath)"
-        Write-AssessmentWorkbookLog "Rows: $($result.RowCount) | Matched: $($result.MatchedCount) | Twoday: $($result.TwodayCount) | No match: $($result.NoMatchCount) | Ambiguous: $($result.AmbiguousCount)"
+        Write-AssessmentWorkbookLog "Rows: $($result.RowCount) | Matched: $($result.MatchedCount) | Twoday: $($result.TwodayCount) | From template: $($result.TemplateCount) | No match: $($result.NoMatchCount) | Ambiguous: $($result.AmbiguousCount)"
         Write-AssessmentWorkbookLog "Duplicates removed: $($result.DuplicatesRemoved) | Conflicts: $($result.ConflictCount)"
     } catch {
         $assessmentWorkbookProgressBar.IsIndeterminate = $false
